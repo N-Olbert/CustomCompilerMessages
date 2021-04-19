@@ -82,5 +82,53 @@ namespace CustomCompilerMessages.Test
                 .WithMessage("Custom warning");
             await VerifyCS.VerifyAnalyzerAsync(test, expected);
         }
+
+        [TestMethod]
+        public async Task RefernceOfPropertyWithAttribute_TriggersViolation()
+        {
+            var test = @"
+    using System;
+    using CustomCompilerMessages.Definitions;
+
+    public class TestClass
+    {
+        [Warning(""Custom warning"")]
+        public object Foo => new object();
+
+        public void Bar()
+        {
+            var x = Foo.GetHashCode();
+        }
+    }";
+
+            var expected = VerifyCS.Diagnostic("CustomCompilerMessages")
+                .WithLocation(12, 21)
+                .WithMessage("Custom warning");
+            await VerifyCS.VerifyAnalyzerAsync(test, expected);
+        }
+
+        [TestMethod]
+        public async Task RefernceOfFieldWithAttribute_TriggersViolation()
+        {
+            var test = @"
+    using System;
+    using CustomCompilerMessages.Definitions;
+
+    public class TestClass
+    {
+        [Warning(""Custom warning"")]
+        private object foo = new object();
+
+        public void Bar()
+        {
+            var x = this.foo.GetHashCode();
+        }
+    }";
+
+            var expected = VerifyCS.Diagnostic("CustomCompilerMessages")
+                .WithLocation(12, 21)
+                .WithMessage("Custom warning");
+            await VerifyCS.VerifyAnalyzerAsync(test, expected);
+        }
     }
 }

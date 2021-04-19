@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Operations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,16 +32,65 @@ namespace CustomCompilerMessages.Analyzers
                 var declarationOfInvokedMethod = context.SemanticModel.GetSymbolInfo(invocation, context.CancellationToken).Symbol as IMethodSymbol;
                 if (declarationOfInvokedMethod != null)
                 {
-                    var attributes = declarationOfInvokedMethod.GetAttributes();
-                    var typedAttribute = attributes.GetAttributeData<WarningAttribute>();
-                    if (typedAttribute != null)
+                    var diagnostic = GetDiagnosticForSymbol(declarationOfInvokedMethod, invocation);
+                    if (diagnostic != null)
                     {
-                        var message = typedAttribute.ConstructorArguments.FirstOrDefault().Value as string;
-                        var diagnostic = Diagnostic.Create(Rule, invocation.GetLocation(), message);
                         context.ReportDiagnostic(diagnostic);
                     }
                 }
             }
+        }
+
+        public static void AnalyzeInvocation(OperationAnalysisContext context)
+        {
+            var method = (context.Operation as IInvocationOperation)?.TargetMethod;
+            if (method != null)
+            {
+                var diagnostic = GetDiagnosticForSymbol(method, context.Operation.Syntax);
+                if (diagnostic != null)
+                {
+                    context.ReportDiagnostic(diagnostic);
+                }
+            }
+        }
+
+        public static void AnalyzePropertyReference(OperationAnalysisContext context)
+        {
+            var accessedProperty = (context.Operation as IPropertyReferenceOperation)?.Property;
+            if (accessedProperty != null)
+            {
+                var diagnostic = GetDiagnosticForSymbol(accessedProperty, context.Operation.Syntax);
+                if (diagnostic != null)
+                {
+                    context.ReportDiagnostic(diagnostic);
+                }
+            }
+        }
+
+        public static void AnalyzeFieldReference(OperationAnalysisContext context)
+        {
+            var accessedField = (context.Operation as IFieldReferenceOperation)?.Field;
+            if (accessedField != null)
+            {
+                var diagnostic = GetDiagnosticForSymbol(accessedField, context.Operation.Syntax);
+                if (diagnostic != null)
+                {
+                    context.ReportDiagnostic(diagnostic);
+                }
+            }
+        }
+
+        private static Diagnostic GetDiagnosticForSymbol(ISymbol symbol, SyntaxNode syntaxNode)
+        {
+            var attributes = symbol.GetAttributes();
+            var typedAttribute = attributes.GetAttributeData<WarningAttribute>();
+            if (typedAttribute != null)
+            {
+                var message = typedAttribute.ConstructorArguments.FirstOrDefault().Value as string;
+                return Diagnostic.Create(Rule, syntaxNode.GetLocation(), message);
+            }
+
+            return null;
         }
     }
 }
