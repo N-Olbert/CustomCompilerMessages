@@ -12,7 +12,7 @@ namespace CustomCompilerMessages.Analyzers
 {
     internal class WarningAnalyzer
     {
-        public const string DiagnosticId = "CustomCompilerMessages";
+        public const string DiagnosticId = "CCM01";
         private static readonly LocalizableString Title = new LocalizableResourceString(nameof(Resources.AnalyzerTitle), Resources.ResourceManager, typeof(Resources));
         private static readonly LocalizableString MessageFormat = new LocalizableResourceString(nameof(Resources.AnalyzerMessageFormat), Resources.ResourceManager, typeof(Resources));
         private static readonly LocalizableString Description = new LocalizableResourceString(nameof(Resources.AnalyzerDescription), Resources.ResourceManager, typeof(Resources));
@@ -20,77 +20,82 @@ namespace CustomCompilerMessages.Analyzers
 
         internal static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(DiagnosticId, Title, MessageFormat, Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, description: Description);
 
-        public static void AnalyzeMethodInvocation(SyntaxNodeAnalysisContext context)
+        public static void AnalyzeInvocation(OperationAnalysisContext context) => 
+            AnalyzeSymbol((context.Operation as IInvocationOperation)?.TargetMethod, context);
+
+        public static void AnalyzePropertyReference(OperationAnalysisContext context) => 
+            AnalyzeSymbol((context.Operation as IPropertyReferenceOperation)?.Property, context);
+
+        public static void AnalyzeFieldReference(OperationAnalysisContext context) => 
+            AnalyzeSymbol((context.Operation as IFieldReferenceOperation)?.Field, context);
+
+        public static void AnalyzeParameterReference(OperationAnalysisContext context) =>
+            AnalyzeSymbol((context.Operation as IParameterReferenceOperation)?.Parameter, context);
+
+        public static void AnalyzeObjectCreation(OperationAnalysisContext context) => 
+            AnalyzeSymbol((context.Operation as IObjectCreationOperation)?.Constructor, context);
+        private static void AnalyzeSymbol(ISymbol symbol, OperationAnalysisContext context)
         {
-            /*
-             * The code in this method was inspired by the answer of user johnny 5 on stackoverflow.com
-             * See: https://stackoverflow.com/a/45419471
-             */
-            var invocation = context.Node as InvocationExpressionSyntax;
-            if (invocation != null)
+            if (symbol != null)
             {
-                var declarationOfInvokedMethod = context.SemanticModel.GetSymbolInfo(invocation, context.CancellationToken).Symbol as IMethodSymbol;
-                if (declarationOfInvokedMethod != null)
+                if (AnalyzeSymbolInternal(symbol, context))
                 {
-                    var diagnostic = GetDiagnosticForSymbol(declarationOfInvokedMethod, invocation);
-                    if (diagnostic != null)
+                    var assembly = symbol.ContainingAssembly;
+                    if (AnalyzeHierachySymbolInternal(assembly, context))
                     {
-                        context.ReportDiagnostic(diagnostic);
+                        var classOrStruct = symbol.ContainingType;
+                        if (AnalyzeHierachySymbolInternal(classOrStruct, context))
+                        {
+                            var interfaces = classOrStruct.AllInterfaces;
+                            if (interfaces != null)
+                            {
+                                foreach (var @interface in classOrStruct.AllInterfaces)
+                                {
+                                    if (!AnalyzeHierachySymbolInternal(@interface, context))
+                                    {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
-        public static void AnalyzeInvocation(OperationAnalysisContext context)
+        private static bool AnalyzeHierachySymbolInternal(ISymbol symbol, OperationAnalysisContext context)
         {
-            var method = (context.Operation as IInvocationOperation)?.TargetMethod;
-            if (method != null)
+            if (!string.IsNullOrEmpty(symbol?.Name) &&
+                !symbol.Name.StartsWith("System") &&
+                !symbol.Name.StartsWith("Microsoft"))
             {
-                var diagnostic = GetDiagnosticForSymbol(method, context.Operation.Syntax);
-                if (diagnostic != null)
-                {
-                    context.ReportDiagnostic(diagnostic);
-                }
+                return AnalyzeSymbolInternal(symbol, context);
             }
+
+            return true;
         }
 
-        public static void AnalyzePropertyReference(OperationAnalysisContext context)
+        private static bool AnalyzeSymbolInternal(ISymbol symbol, OperationAnalysisContext context)
         {
-            var accessedProperty = (context.Operation as IPropertyReferenceOperation)?.Property;
-            if (accessedProperty != null)
+            if (context.CancellationToken.IsCancellationRequested)
             {
-                var diagnostic = GetDiagnosticForSymbol(accessedProperty, context.Operation.Syntax);
-                if (diagnostic != null)
+                return false;
+            }
+
+            if (symbol != null)
+            {
+                var attributes = symbol.GetAttributes();
+                var typedAttribute = attributes.GetAttributeData<WarningAttribute>();
+                if (typedAttribute != null)
                 {
+                    var message = typedAttribute.ConstructorArguments.FirstOrDefault().Value as string;
+                    var diagnostic = Diagnostic.Create(Rule, context.Operation?.Syntax?.GetLocation(), message);
                     context.ReportDiagnostic(diagnostic);
+                    return false;
                 }
             }
-        }
 
-        public static void AnalyzeFieldReference(OperationAnalysisContext context)
-        {
-            var accessedField = (context.Operation as IFieldReferenceOperation)?.Field;
-            if (accessedField != null)
-            {
-                var diagnostic = GetDiagnosticForSymbol(accessedField, context.Operation.Syntax);
-                if (diagnostic != null)
-                {
-                    context.ReportDiagnostic(diagnostic);
-                }
-            }
-        }
-
-        private static Diagnostic GetDiagnosticForSymbol(ISymbol symbol, SyntaxNode syntaxNode)
-        {
-            var attributes = symbol.GetAttributes();
-            var typedAttribute = attributes.GetAttributeData<WarningAttribute>();
-            if (typedAttribute != null)
-            {
-                var message = typedAttribute.ConstructorArguments.FirstOrDefault().Value as string;
-                return Diagnostic.Create(Rule, syntaxNode.GetLocation(), message);
-            }
-
-            return null;
+            return true;
         }
     }
 }

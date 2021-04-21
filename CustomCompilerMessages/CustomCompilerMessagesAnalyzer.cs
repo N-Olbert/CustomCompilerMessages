@@ -22,6 +22,8 @@ namespace CustomCompilerMessages
             context.EnableConcurrentExecution();
 
             context.RegisterOperationAction(WarningAnalyzer.AnalyzeInvocation, OperationKind.Invocation);
+            context.RegisterOperationAction(WarningAnalyzer.AnalyzeObjectCreation, OperationKind.ObjectCreation);
+            context.RegisterOperationAction(WarningAnalyzer.AnalyzeParameterReference, OperationKind.ParameterReference);
             context.RegisterOperationAction(WarningAnalyzer.AnalyzePropertyReference, OperationKind.PropertyReference);
             context.RegisterOperationAction(WarningAnalyzer.AnalyzeFieldReference, OperationKind.FieldReference);
         }
