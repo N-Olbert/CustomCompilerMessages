@@ -2,7 +2,10 @@
 
 namespace CustomCompilerMessages.Definitions
 {
-    [AttributeUsage(AttributeTargets.Method)]
+    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Property | 
+                    AttributeTargets.Field | AttributeTargets.Constructor |
+                    AttributeTargets.Parameter | AttributeTargets.Class |
+                    AttributeTargets.Struct | AttributeTargets.Interface)]
     public sealed class WarningAttribute : Attribute
     {
         public string Message { get; set; }
